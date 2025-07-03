@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controle: Monitor de Planta Inteligente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .led {
+            transition: all 0.3s ease;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #9ca3af;
+        }
+        .led.active {
+            border-color: #fefce8;
+        }
+        .led-red.active { background-color: #ef4444; box-shadow: 0 0 15px 3px #ef4444; }
+        .led-yellow.active { background-color: #facc15; box-shadow: 0 0 15px 3px #facc15; }
+        .led-green.active { background-color: #4ade80; box-shadow: 0 0 15px 3px #4ade80; }
+        .led-blue.active { background-color: #3b82f6; box-shadow: 0 0 15px 3px #3b82f6; }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .fan.spinning {
+            animation: spin 1s linear infinite;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #22c55e;
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+    </style>
+    <!-- Chosen Palette: Warm Neutrals with Green Accent -->
+    <!-- Application Structure Plan: A two-column dashboard layout. The left column shows the "live" status of the plant system (visuals like LEDs, fan) and allows user interaction via sliders and toggles. The right column provides static, contextual information from the report (components, future improvements). This structure was chosen to separate dynamic simulation from static information, making it easy for the user to understand the cause-and-effect of their actions on the system while having reference material readily available. It's more engaging than a simple top-to-bottom text page. -->
+    <!-- Visualization & Content Choices: 
+        - Umidade do Solo: Report Info -> Conditional logic for LEDs based on moisture %. Goal -> Allow user to test this logic. Viz/Method -> A range slider (0-100) and colored divs for LEDs. Interaction -> User drags slider, JS updates LED colors and a status text block. Justification -> Directly simulates the core functionality in an intuitive, visual way. Library/Method -> Vanilla JS, HTML/CSS.
+        - Temperatura/Ventilador: Report Info -> Fan turns on above a temperature threshold. Goal -> Demonstrate the fan's on/off state. Viz/Method -> A toggle switch and a fan icon. Interaction -> User clicks toggle, JS adds/removes a 'spin' animation class to the fan icon. Justification -> Clear, immediate visual feedback for a binary state. Library/Method -> Vanilla JS, CSS @keyframes.
+        - Componentes & Melhorias: Report Info -> Simple lists of hardware and future ideas. Goal -> Inform. Viz/Method -> Styled HTML lists inside cards. Interaction -> None. Justification -> Clean and clear presentation for static information. Library/Method -> HTML/Tailwind.
+        - No charts were used as the report contains conditional logic, not complex datasets, making charts inappropriate.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-6xl">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-emerald-800">Painel Interativo</h1>
+            <p class="text-lg text-slate-600 mt-2">Monitor de Planta Inteligente</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <!-- Coluna de Simulação Interativa -->
+            <div class="space-y-8">
+
+                <!-- Card de Status da Planta -->
+                <div class="bg-white p-6 rounded-2xl shadow-lg">
+                    <h2 class="text-2xl font-bold mb-2 text-emerald-700">Status da Planta</h2>
+                    <p class="text-slate-600 mb-6">Esta seção mostra o estado atual da sua planta com base nos dados simulados abaixo. Altere os controles para ver como o sistema reage.</p>
+                    
+                    <div class="bg-slate-50 p-6 rounded-xl flex flex-col sm:flex-row items-center justify-around gap-6">
+                        <!-- Indicadores de Status -->
+                        <div class="w-full sm:w-1/2">
+                            <div class="flex items-center justify-between mb-4">
+                                <span class="font-semibold">💧 Umidade do Solo:</span>
+                                <span id="moistureValue" class="font-bold text-lg text-emerald-600">30%</span>
+                            </div>
+                            <div class="flex items-center justify-between mb-4">
+                                <span class="font-semibold">☀️ Luminosidade (LDR):</span>
+                                <span class="font-bold text-lg text-emerald-600">550</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="font-semibold">🌡️ Temperatura:</span>
+                                <span id="temperatureValue" class="font-bold text-lg text-emerald-600">25°C</span>
+                            </div>
+                        </div>
+
+                        <!-- LEDs e Ventilador -->
+                        <div class="w-full sm:w-1/2 flex flex-col items-center">
+                            <div class="flex space-x-3 mb-4">
+                                <div id="led-red" class="led led-red" title="Solo muito seco (<15%)"></div>
+                                <div id="led-yellow" class="led led-yellow" title="Solo ligeiramente seco (15-25%)"></div>
+                                <div id="led-green" class="led led-green active" title="Solo ideal (25-40%)"></div>
+                                <div id="led-blue" class="led led-blue" title="Solo muito úmido (>40%)"></div>
+                            </div>
+                            <div id="fan-icon" class="fan text-4xl text-slate-500 transition-colors duration-300">⚙️</div>
+                            <span id="fan-status" class="text-sm font-medium text-slate-500 mt-1">Ventilador Desligado</span>
+                        </div>
+                    </div>
+                    <div id="status-text" class="mt-4 text-center font-semibold text-lg text-emerald-800 bg-emerald-50 p-3 rounded-lg">
+                        A umidade da terra está perfeita.
+                    </div>
+                </div>
+
+                <!-- Card de Controles -->
+                <div class="bg-white p-6 rounded-2xl shadow-lg">
+                    <h2 class="text-2xl font-bold mb-2 text-emerald-700">Controles de Simulação</h2>
+                    <p class="text-slate-600 mb-6">Use os controles abaixo para simular diferentes condições ambientais e testar a lógica do sistema.</p>
+                    
+                    <div class="space-y-6">
+                        <div>
+                            <label for="moistureSlider" class="block mb-2 font-semibold">Ajustar Umidade do Solo</label>
+                            <input id="moistureSlider" type="range" min="0" max="100" value="30" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <span class="font-semibold">Simular Superaquecimento (> 28°C)</span>
+                            <label class="toggle-switch">
+                                <input id="tempToggle" type="checkbox">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Coluna de Informações Estáticas -->
+            <div class="space-y-8">
+                <!-- Card de Componentes -->
+                <div class="bg-white p-6 rounded-2xl shadow-lg">
+                    <h2 class="text-2xl font-bold mb-2 text-emerald-700">Componentes do Projeto</h2>
+                    <p class="text-slate-600 mb-4">O sistema físico é construído com algumas peças eletrônicas principais, que trabalham juntas para monitorar a planta.</p>
+                    <ul class="space-y-3 list-inside">
+                        <li class="flex items-center"><span class="text-emerald-600 mr-3 text-xl">🧠</span> <strong>Placa Arduino:</strong> O "cérebro" que controla tudo.</li>
+                        <li class="flex items-center"><span class="text-emerald-600 mr-3 text-xl">💡</span> <strong>Sensor de Luz (LDR):</strong> Mede a quantidade de luz.</li>
+                        <li class="flex items-center"><span class="text-emerald-600 mr-3 text-xl">💧</span> <strong>Sensor de Umidade do Solo:</strong> Mede a umidade da terra.</li>
+                        <li class="flex items-center"><span class="text-emerald-600 mr-3 text-xl">💨</span> <strong>Mini Ventilador:</strong> Usado para resfriar o ambiente.</li>
+                        <li class="flex items-center"><span class="text-emerald-600 mr-3 text-xl">🔵</span> <strong>Luzes Coloridas (LEDs):</strong> Dão avisos visuais sobre a umidade.</li>
+                    </ul>
+                </div>
+                
+                <!-- Card de Melhorias Futuras -->
+                <div class="bg-white p-6 rounded-2xl shadow-lg">
+                    <h2 class="text-2xl font-bold mb-2 text-emerald-700">Próximos Passos</h2>
+                    <p class="text-slate-600 mb-4">Este é um projeto inicial. Ele pode ser melhorado com novas funcionalidades para se tornar um sistema de cuidado ainda mais completo.</p>
+                     <ul class="space-y-3 list-inside">
+                        <li class="flex items-center"><span class="text-emerald-600 mr-3 text-xl">🌡️</span> <strong>Adicionar Sensor de Temperatura Real:</strong> Para leituras precisas.</li>
+                        <li class="flex items-center"><span class="text-emerald-600 mr-3 text-xl">💦</span> <strong>Instalar uma Bomba d'Água:</strong> Para regar a planta automaticamente.</li>
+                        <li class="flex items-center"><span class="text-emerald-600 mr-3 text-xl">💾</span> <strong>Salvar os Dados:</strong> Para analisar o histórico da planta.</li>
+                        <li class="flex items-center"><span class="text-emerald-600 mr-3 text-xl">📱</span> <strong>Criar uma Tela ou App:</strong> Para visualizar os dados de forma mais fácil.</li>
+                        <li class="flex items-center"><span class="text-emerald-600 mr-3 text-xl">🔋</span> <strong>Otimizar o Consumo de Energia:</strong> Para funcionar com baterias.</li>
+                    </ul>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const moistureSlider = document.getElementById('moistureSlider');
+            const moistureValue = document.getElementById('moistureValue');
+            const statusText = document.getElementById('status-text');
+            const leds = {
+                red: document.getElementById('led-red'),
+                yellow: document.getElementById('led-yellow'),
+                green: document.getElementById('led-green'),
+                blue: document.getElementById('led-blue')
+            };
+
+            const tempToggle = document.getElementById('tempToggle');
+            const temperatureValue = document.getElementById('temperatureValue');
+            const fanIcon = document.getElementById('fan-icon');
+            const fanStatus = document.getElementById('fan-status');
+
+            function updateMoistureStatus(value) {
+                moistureValue.textContent = `${value}%`;
+                
+                Object.values(leds).forEach(led => led.classList.remove('active'));
+
+                if (value < 15) {
+                    leds.red.classList.add('active');
+                    statusText.textContent = 'A terra está muito seca!';
+                    statusText.className = 'mt-4 text-center font-semibold text-lg text-red-800 bg-red-50 p-3 rounded-lg';
+                } else if (value >= 15 && value <= 25) {
+                    leds.yellow.classList.add('active');
+                    statusText.textContent = 'A terra está um pouco seca.';
+                    statusText.className = 'mt-4 text-center font-semibold text-lg text-yellow-800 bg-yellow-50 p-3 rounded-lg';
+                } else if (value > 25 && value <= 40) {
+                    leds.green.classList.add('active');
+                    statusText.textContent = 'A umidade da terra está perfeita.';
+                    statusText.className = 'mt-4 text-center font-semibold text-lg text-emerald-800 bg-emerald-50 p-3 rounded-lg';
+                } else { // value > 40
+                    leds.blue.classList.add('active');
+                    statusText.textContent = 'A terra está muito molhada!';
+                    statusText.className = 'mt-4 text-center font-semibold text-lg text-blue-800 bg-blue-50 p-3 rounded-lg';
+                }
+            }
+
+            function updateTemperatureStatus(isHigh) {
+                if (isHigh) {
+                    temperatureValue.textContent = '30°C';
+                    temperatureValue.classList.add('text-red-600');
+                    temperatureValue.classList.remove('text-emerald-600');
+                    fanIcon.classList.add('spinning');
+                    fanIcon.classList.add('text-emerald-500');
+                    fanIcon.classList.remove('text-slate-500');
+                    fanStatus.textContent = 'Ventilador Ligado';
+                } else {
+                    temperatureValue.textContent = '25°C';
+                    temperatureValue.classList.remove('text-red-600');
+                    temperatureValue.classList.add('text-emerald-600');
+                    fanIcon.classList.remove('spinning');
+                    fanIcon.classList.remove('text-emerald-500');
+                    fanIcon.classList.add('text-slate-500');
+                    fanStatus.textContent = 'Ventilador Desligado';
+                }
+            }
+
+            moistureSlider.addEventListener('input', (event) => {
+                updateMoistureStatus(event.target.value);
+            });
+
+            tempToggle.addEventListener('change', (event) => {
+                updateTemperatureStatus(event.target.checked);
+            });
+            
+            updateMoistureStatus(moistureSlider.value);
+            updateTemperatureStatus(tempToggle.checked);
+        });
+    </script>
+</body>
+</html>
